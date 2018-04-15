@@ -35,13 +35,20 @@ initmodel =
         , values = [ "12月", "11月", "10月", "9月", "8月", "7月", "6月", "5月", "4月", "3月", "2月", "1月" ]
         }
     , yAxis =
-        [ { label = "Y"
-          , color = "green"
-          , values = [ 201, 195, 197, 203, 200, 201, 198, 190, 187, 188, 185, 180 ]
+        [ { label = "yellow chart"
+          , color = "yellow"
+          , values = [ 21, 19, 18, 20, 21, 22, 20, 19, 18, 18, 18, 17 ]
+          , visible = False
           }
-        , { label = "Y2"
+        , { label = "blue chart"
           , color = "blue"
           , values = [ 1, 4, 5, 4, 7, 8, 7, 11, 11, 20, 11, 12 ]
+          , visible = True
+          }
+        , { label = "green chart"
+          , color = "green"
+          , values = [ 201, 195, 197, 203, 200, 201, 198, 190, 187, 188, 185, 180 ]
+          , visible = True
           }
         ]
     , newValue = ""

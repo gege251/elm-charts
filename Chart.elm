@@ -42,6 +42,7 @@ type alias YAxis =
     { label : String
     , color : String
     , values : List Int
+    , visible : Bool
     }
 
 
@@ -74,6 +75,7 @@ type alias YHelperValues =
     , ySpan : Maybe Int
     , yScale : Float
     , yGrids : List Int
+    , color : String
     }
 
 
@@ -127,16 +129,13 @@ mkHelper { xAxis, chartHeight } yAxis =
         , ySpan = ySpan
         , yScale = yScale
         , yGrids = yGrids
+        , color = yAxis.color
         }
 
 
 mkChart : ChartModel r -> Chart
 mkChart ({ chartHeight, chartWidth, xAxis, yAxis } as chartModel) =
     let
-        helpers : List YHelperValues
-        helpers =
-            List.map (mkHelper chartModel) chartModel.yAxis
-
         -- Number of values displayed on the x axis
         xGridCount : Int
         xGridCount =
@@ -179,17 +178,18 @@ mkChart ({ chartHeight, chartWidth, xAxis, yAxis } as chartModel) =
         , chartWidth = chartWidth
         , xLabels = xAxis.values
         , ySets =
-            List.map2
-                (\helper { color } ->
-                    { dots = mkDots xGridCount helper
-                    , lines = (zipChain << mkDots xGridCount) helper
-                    , yGridVals = helper.yGrids
-                    , yGridPos = mkYGridLines helper
-                    , color = color
-                    }
-                )
-                helpers
-                yAxis
+            List.filter .visible yAxis
+                |> List.map
+                    (mkHelper chartModel
+                        >> (\helper ->
+                                { dots = mkDots xGridCount helper
+                                , lines = (zipChain << mkDots xGridCount) helper
+                                , yGridVals = helper.yGrids
+                                , yGridPos = mkYGridLines helper
+                                , color = helper.color
+                                }
+                           )
+                    )
         }
 
 
