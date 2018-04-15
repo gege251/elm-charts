@@ -1,4 +1,4 @@
-module Chart exposing (viewChart, XAxis, YAxis)
+module Chart exposing (view, XAxis, YAxis)
 
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
@@ -10,15 +10,25 @@ type alias ChartModel r =
         | chartWidth : Int
         , chartHeight : Int
         , xAxis : XAxis
-        , yAxis : YAxis
+        , yAxis : List YAxis
     }
 
 
 type alias Chart =
+    { xGridPositions : List Int
+    , xLabels : List String
+    , ySets : List YSet
+    , chartHeight : Int
+    , chartWidth : Int
+    }
+
+
+type alias YSet =
     { dots : List Position
-    , lines : List ( Position, Position )
+    , lines : List Line
     , yGridVals : List Int
-    , yGridPos : List ( Position, Position )
+    , yGridPos : List Line
+    , color : String
     }
 
 
@@ -39,120 +49,185 @@ type alias Position =
     ( Int, Int )
 
 
-mkChart : ChartModel r -> Chart
-mkChart { chartHeight, chartWidth, xAxis, yAxis } =
+type alias Line =
+    ( Position, Position )
+
+
+calcX : Float -> Int -> Int
+calcX xScale grid =
+    scale xScale grid - (round (xScale / 2))
+
+
+calcY : ChartModel r -> YHelperValues -> Int -> Int
+calcY { chartHeight } { yScale, yMin } val =
     let
-        displayedYVals : List Int
-        displayedYVals =
+        yOffset =
+            Maybe.withDefault 0 yMin |> scale yScale |> flip (-) 20
+    in
+        (chartHeight - (scale yScale val)) + yOffset
+
+
+type alias YHelperValues =
+    { visibleYVals : List Int
+    , yMax : Maybe Int
+    , yMin : Maybe Int
+    , ySpan : Maybe Int
+    , yScale : Float
+    , yGrids : List Int
+    }
+
+
+mkHelper : ChartModel r -> YAxis -> YHelperValues
+mkHelper { xAxis, chartHeight } yAxis =
+    let
+        -- List of the visible Y values only
+        visibleYVals =
             List.take xGridCount yAxis.values
 
-        calcX : Float -> Int -> Int
-        calcX xScale grid =
-            scale xScale grid - (round (xScale / 2))
-
-        calcY : Float -> Int -> Int
-        calcY yScale val =
-            (chartHeight - (scale yScale val)) + yOffset
-
-        yMax : Maybe Int
+        -- Maximum of y values
         yMax =
-            List.maximum displayedYVals
+            List.maximum visibleYVals
 
-        yMin : Maybe Int
+        -- Minimum of y values
         yMin =
-            List.minimum displayedYVals
+            List.minimum visibleYVals
 
-        ySpan : Maybe Int
+        -- Span between min and max of y values
         ySpan =
             Maybe.map2 (-) yMax yMin
 
+        -- Rate of scaling for y values to real pixels
+        yScale =
+            Maybe.withDefault 0 ySpan
+                |> toFloat
+                |> (/) (toFloat (chartHeight - 40))
+
+        -- Number of values displayed on the x axis
+        xGridCount =
+            List.length xAxis.values
+
+        -- The spacing value of horizontal gridlines
+        yGridUnit =
+            ySpan
+                |> Maybe.withDefault 0
+                |> toFloat
+                |> (logBase) 10
+                |> floor
+                |> (^) 10
+
+        -- Exact values of horizontal gridlines
+        yGrids =
+            Maybe.map2 (\min max -> List.range (min // yGridUnit) (max // yGridUnit)) yMin yMax
+                |> Maybe.withDefault []
+                |> List.map ((*) yGridUnit)
+    in
+        { visibleYVals = visibleYVals
+        , yMax = yMax
+        , yMin = yMin
+        , ySpan = ySpan
+        , yScale = yScale
+        , yGrids = yGrids
+        }
+
+
+mkChart : ChartModel r -> Chart
+mkChart ({ chartHeight, chartWidth, xAxis, yAxis } as chartModel) =
+    let
+        helpers : List YHelperValues
+        helpers =
+            List.map (mkHelper chartModel) chartModel.yAxis
+
+        -- Number of values displayed on the x axis
         xGridCount : Int
         xGridCount =
             List.length xAxis.values
 
+        -- Rate of scaling for x values to real pixels
         xScale : Float
         xScale =
             chartWidth
                 |> toFloat
                 |> flip (/) (toFloat xGridCount)
 
-        yScale : Float
-        yScale =
-            Maybe.withDefault 0 ySpan
-                |> toFloat
-                |> (/) (toFloat (chartHeight - 40))
+        -- Vertical grid positions
+        xGridPositions : List Int
+        xGridPositions =
+            List.map (\grid -> calcX xScale grid) (List.reverse <| List.range 1 xGridCount)
 
-        yGrids : List Int
-        yGrids =
+        -- Calculates horizontal gridline positions in pixels
+        mkYGridLines : YHelperValues -> List ( Position, Position )
+        mkYGridLines ({ yGrids } as helper) =
             let
-                yGridUnit : Int
-                yGridUnit =
-                    ySpan
-                        |> Maybe.withDefault 0
-                        |> toFloat
-                        |> (logBase) 10
-                        |> floor
-                        |> (^) 10
+                mkYGridLine yGrid =
+                    let
+                        y =
+                            calcY chartModel helper yGrid
+                    in
+                        ( ( 0, y ), ( chartWidth, y ) )
             in
-                Maybe.map2 (\min max -> List.range (min // yGridUnit) (max // yGridUnit)) yMin yMax
-                    |> Maybe.withDefault []
-                    |> List.map ((*) yGridUnit)
+                List.map mkYGridLine yGrids
 
-        yOffset : Int
-        yOffset =
-            Maybe.withDefault 0 yMin |> scale yScale |> flip (-) 20
-
-        mkYGrid : Int -> ( Position, Position )
-        mkYGrid gridVal =
-            let
-                y =
-                    calcY yScale gridVal
-            in
-                ( ( 0, y ), ( chartWidth, y ) )
-
-        mkDots : List Int -> Int -> List Position
-        mkDots values gridCount =
-            List.map2 (\val grid -> ( calcX xScale grid, calcY yScale val ))
-                yAxis.values
-                (List.reverse <| List.range 1 gridCount)
+        -- Calculates y value dot position in pizels
+        mkDots : Int -> YHelperValues -> List Position
+        mkDots xGridCount ({ visibleYVals } as helper) =
+            List.map2 (\val xPos -> ( xPos, calcY chartModel helper val ))
+                visibleYVals
+                xGridPositions
     in
-        { dots = mkDots yAxis.values xGridCount
-        , lines = zipChain <| mkDots yAxis.values xGridCount
-        , yGridVals = yGrids
-        , yGridPos = List.map mkYGrid yGrids
+        { xGridPositions = xGridPositions
+        , chartHeight = chartHeight
+        , chartWidth = chartWidth
+        , xLabels = xAxis.values
+        , ySets =
+            List.map2
+                (\helper { color } ->
+                    { dots = mkDots xGridCount helper
+                    , lines = (zipChain << mkDots xGridCount) helper
+                    , yGridVals = helper.yGrids
+                    , yGridPos = mkYGridLines helper
+                    , color = color
+                    }
+                )
+                helpers
+                yAxis
         }
 
 
-viewChart : ChartModel r -> Html msg
-viewChart model =
+view : ChartModel r -> Html msg
+view =
+    mkChart >> viewChart
+
+
+viewChart : Chart -> Html msg
+viewChart chart =
     let
         showGrid =
             List.map (showLine "grey")
 
-        showDots =
-            List.map (showDot model.yAxis.color)
+        showDots color =
+            List.map (showDot color)
 
-        showLines =
-            List.map (showLine model.yAxis.color)
+        showLines color =
+            List.map (showLine color)
 
         showXLabels =
-            List.map2 (showXLabel model.chartHeight)
+            List.map2 (showXLabel chart.chartHeight)
 
         showYLabels =
-            List.map2 (showYLabel model.chartWidth)
-
-        chart1 =
-            mkChart model
-
-        chart2 =
-            mkChart model
+            List.map2 (showYLabel chart.chartWidth)
     in
-        svg [ width (toString model.chartWidth), height (toString model.chartHeight) ]
-            (showGrid chart1.yGridPos
-                ++ showDots chart1.dots
-                ++ showLines chart1.lines
-                ++ showXLabels model.xAxis.values chart1.dots
-                ++ showYLabels chart1.yGridVals chart1.yGridPos
+        svg [ width (toString chart.chartWidth), height (toString chart.chartHeight) ]
+            (showXLabels chart.xLabels chart.xGridPositions
+                ++ List.concat
+                    (List.map
+                        (\ySet ->
+                            showGrid ySet.yGridPos
+                                ++ showYLabels ySet.yGridVals ySet.yGridPos
+                                ++ showDots ySet.color ySet.dots
+                                ++ showLines ySet.color ySet.lines
+                        )
+                        chart.ySets
+                    )
             )
 
 
@@ -180,8 +255,8 @@ showLine color ( ( x1_, y1_ ), ( x2_, y2_ ) ) =
         []
 
 
-showXLabel : Int -> String -> Position -> Svg msg
-showXLabel yPos label ( x_, _ ) =
+showXLabel : Int -> String -> Int -> Svg msg
+showXLabel yPos label x_ =
     text_
         [ x <| toString x_
         , y <| toString yPos
@@ -192,9 +267,9 @@ showXLabel yPos label ( x_, _ ) =
 
 
 showYLabel : Int -> Int -> ( Position, Position ) -> Svg msg
-showYLabel chartWidth gridVal ( _, ( _, y_ ) ) =
+showYLabel labelXPos gridVal ( _, ( _, y_ ) ) =
     text_
-        [ x <| toString chartWidth
+        [ x <| toString labelXPos
         , y <| toString y_
         , textAnchor "end"
         , fill "black"
