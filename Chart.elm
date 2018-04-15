@@ -202,13 +202,13 @@ viewChart : Chart -> Html msg
 viewChart chart =
     let
         showGrid =
-            List.map (showLine "grey")
+            List.map (showLine "grey" 0.1)
 
         showDots color =
             List.map (showDot color)
 
         showLines color =
-            List.map (showLine color)
+            List.map (showLine color 2)
 
         showXLabels =
             List.map2 (showXLabel chart.chartHeight)
@@ -243,14 +243,15 @@ showDot color ( x, y ) =
         []
 
 
-showLine : String -> ( Position, Position ) -> Svg msg
-showLine color ( ( x1_, y1_ ), ( x2_, y2_ ) ) =
+showLine : String -> Float -> ( Position, Position ) -> Svg msg
+showLine color lineWidth ( ( x1_, y1_ ), ( x2_, y2_ ) ) =
     line
         [ x1 <| toString x1_
         , y1 <| toString y1_
         , x2 <| toString x2_
         , y2 <| toString y2_
         , stroke color
+        , strokeWidth <| toString lineWidth
         ]
         []
 
