@@ -1,7 +1,8 @@
-module Chart exposing (view, XAxis, YAxis)
+module Chart exposing (Msg, update, view, ChartModel, XAxis, YAxis)
 
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
+import Svg.Events exposing (..)
 import Html exposing (Html)
 
 
@@ -10,7 +11,7 @@ type alias ChartModel r =
         | chartWidth : Int
         , chartHeight : Int
         , xAxis : XAxis
-        , yAxis : List YAxis
+        , yAxes : List YAxis
     }
 
 
@@ -20,6 +21,7 @@ type alias Chart =
     , ySets : List YSet
     , chartHeight : Int
     , chartWidth : Int
+    , yLabels : List { label : String, visible : Bool }
     }
 
 
@@ -54,6 +56,10 @@ type alias Line =
     ( Position, Position )
 
 
+type Msg
+    = ToggleVisibility String
+
+
 calcX : Float -> Int -> Int
 calcX xScale grid =
     scale xScale grid - (round (xScale / 2))
@@ -77,6 +83,24 @@ type alias YHelperValues =
     , yGrids : List Int
     , color : String
     }
+
+
+update : Msg -> ChartModel r -> ChartModel r
+update msg model =
+    case msg of
+        ToggleVisibility label ->
+            let
+                newYAxes =
+                    List.map
+                        (\yAxis ->
+                            if yAxis.label == label then
+                                { yAxis | visible = not yAxis.visible }
+                            else
+                                yAxis
+                        )
+                        model.yAxes
+            in
+                { model | yAxes = newYAxes }
 
 
 mkHelper : ChartModel r -> YAxis -> YHelperValues
@@ -134,7 +158,7 @@ mkHelper { xAxis, chartHeight } yAxis =
 
 
 mkChart : ChartModel r -> Chart
-mkChart ({ chartHeight, chartWidth, xAxis, yAxis } as chartModel) =
+mkChart ({ chartHeight, chartWidth, xAxis, yAxes } as chartModel) =
     let
         -- Number of values displayed on the x axis
         xGridCount : Int
@@ -177,8 +201,9 @@ mkChart ({ chartHeight, chartWidth, xAxis, yAxis } as chartModel) =
         , chartHeight = chartHeight
         , chartWidth = chartWidth
         , xLabels = xAxis.values
+        , yLabels = List.map (\{ label, visible } -> { label = label, visible = visible }) yAxes
         , ySets =
-            List.filter .visible yAxis
+            List.filter .visible yAxes
                 |> List.map
                     (mkHelper chartModel
                         >> (\helper ->
@@ -193,12 +218,12 @@ mkChart ({ chartHeight, chartWidth, xAxis, yAxis } as chartModel) =
         }
 
 
-view : ChartModel r -> Html msg
+view : ChartModel r -> Html Msg
 view =
     mkChart >> viewChart
 
 
-viewChart : Chart -> Html msg
+viewChart : Chart -> Html Msg
 viewChart chart =
     let
         showGrid =
@@ -215,9 +240,26 @@ viewChart chart =
 
         showYLabels =
             List.map2 (showYLabel chart.chartWidth)
+
+        showChartLabels =
+            List.indexedMap
+                (\index { label, visible } ->
+                    text_
+                        [ x <| toString (100 * index)
+                        , y "20"
+                        , onClick (ToggleVisibility label)
+                        , fill <|
+                            if visible then
+                                "black"
+                            else
+                                "#ddd"
+                        ]
+                        [ text label ]
+                )
     in
         svg [ width (toString chart.chartWidth), height (toString chart.chartHeight) ]
-            (showXLabels chart.xLabels chart.xGridPositions
+            (showChartLabels chart.yLabels
+                ++ showXLabels chart.xLabels chart.xGridPositions
                 ++ List.concat
                     (List.map
                         (\ySet ->

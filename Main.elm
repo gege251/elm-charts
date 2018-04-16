@@ -11,13 +11,14 @@ type alias Model =
     , chartWidth : Int
     , chartHeight : Int
     , xAxis : Chart.XAxis
-    , yAxis : List Chart.YAxis
+    , yAxes : List Chart.YAxis
     , newValue : String
     }
 
 
 type Msg
     = NoOp
+    | ChartMsg Chart.Msg
 
 
 
@@ -34,7 +35,7 @@ initmodel =
         { label = "X"
         , values = [ "12月", "11月", "10月", "9月", "8月", "7月", "6月", "5月", "4月", "3月", "2月", "1月" ]
         }
-    , yAxis =
+    , yAxes =
         [ { label = "yellow chart"
           , color = "yellow"
           , values = [ 21, 19, 18, 20, 21, 22, 20, 19, 18, 18, 18, 17 ]
@@ -81,6 +82,9 @@ update msg model =
         NoOp ->
             model ! [ Cmd.none ]
 
+        ChartMsg chartmsg ->
+            Chart.update chartmsg model ! [ Cmd.none ]
+
 
 
 -- InputValue value ->
@@ -100,7 +104,7 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ text (toString model.yAxis)
+        [ div [] [ text (toString model.yAxes) ]
 
         -- , form [ onSubmit (AddValue model.newValue) ]
         --     [ input
@@ -111,8 +115,7 @@ view model =
         --         []
         --     , button [] [ text "OK" ]
         --     ]
-        , br [] []
-        , Chart.view model
+        , Html.map ChartMsg (Chart.view model)
         ]
 
 
