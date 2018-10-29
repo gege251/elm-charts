@@ -1,9 +1,9 @@
-module Chart exposing (Msg, update, view, ChartModel, XAxis, YAxis)
+module Chart exposing (ChartModel, Msg, XAxis, YAxis, update, view)
 
+import Html exposing (Html)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import Svg.Events exposing (..)
-import Html exposing (Html)
 
 
 type alias ChartModel r =
@@ -62,16 +62,16 @@ type Msg
 
 calcX : Float -> Int -> Int
 calcX xScale grid =
-    scale xScale grid - (round (xScale / 2))
+    scale xScale grid - round (xScale / 2)
 
 
 calcY : ChartModel r -> YHelperValues -> Int -> Int
 calcY { chartHeight } { yScale, yMin } val =
     let
         yOffset =
-            Maybe.withDefault 0 yMin |> scale yScale |> flip (-) 20
+            Maybe.withDefault 0 yMin |> scale yScale |> (\a -> (-) a 20)
     in
-        (chartHeight - (scale yScale val)) + yOffset
+    (chartHeight - scale yScale val) + yOffset
 
 
 type alias YHelperValues =
@@ -95,12 +95,13 @@ update msg model =
                         (\yAxis ->
                             if yAxis.label == label then
                                 { yAxis | visible = not yAxis.visible }
+
                             else
                                 yAxis
                         )
                         model.yAxes
             in
-                { model | yAxes = newYAxes }
+            { model | yAxes = newYAxes }
 
 
 mkHelper : ChartModel r -> YAxis -> YHelperValues
@@ -137,7 +138,7 @@ mkHelper { xAxis, chartHeight } yAxis =
             ySpan
                 |> Maybe.withDefault 0
                 |> toFloat
-                |> (logBase) 10
+                |> logBase 10
                 |> floor
                 |> (^) 10
 
@@ -147,14 +148,14 @@ mkHelper { xAxis, chartHeight } yAxis =
                 |> Maybe.withDefault []
                 |> List.map ((*) yGridUnit)
     in
-        { visibleYVals = visibleYVals
-        , yMax = yMax
-        , yMin = yMin
-        , ySpan = ySpan
-        , yScale = yScale
-        , yGrids = yGrids
-        , color = yAxis.color
-        }
+    { visibleYVals = visibleYVals
+    , yMax = yMax
+    , yMin = yMin
+    , ySpan = ySpan
+    , yScale = yScale
+    , yGrids = yGrids
+    , color = yAxis.color
+    }
 
 
 mkChart : ChartModel r -> Chart
@@ -170,7 +171,7 @@ mkChart ({ chartHeight, chartWidth, xAxis, yAxes } as chartModel) =
         xScale =
             chartWidth
                 |> toFloat
-                |> flip (/) (toFloat xGridCount)
+                |> (\a -> (/) a (toFloat xGridCount))
 
         -- Vertical grid positions
         xGridPositions : List Int
@@ -186,36 +187,36 @@ mkChart ({ chartHeight, chartWidth, xAxis, yAxes } as chartModel) =
                         y =
                             calcY chartModel helper yGrid
                     in
-                        ( ( 0, y ), ( chartWidth, y ) )
+                    ( ( 0, y ), ( chartWidth, y ) )
             in
-                List.map mkYGridLine yGrids
+            List.map mkYGridLine yGrids
 
         -- Calculates y value dot position in pizels
-        mkDots : Int -> YHelperValues -> List Position
-        mkDots xGridCount ({ visibleYVals } as helper) =
+        mkDots : YHelperValues -> List Position
+        mkDots ({ visibleYVals } as helper) =
             List.map2 (\val xPos -> ( xPos, calcY chartModel helper val ))
                 visibleYVals
                 xGridPositions
     in
-        { xGridPositions = xGridPositions
-        , chartHeight = chartHeight
-        , chartWidth = chartWidth
-        , xLabels = xAxis.values
-        , yLabels = List.map (\{ label, visible } -> { label = label, visible = visible }) yAxes
-        , ySets =
-            List.filter .visible yAxes
-                |> List.map
-                    (mkHelper chartModel
-                        >> (\helper ->
-                                { dots = mkDots xGridCount helper
-                                , lines = (zipChain << mkDots xGridCount) helper
-                                , yGridVals = helper.yGrids
-                                , yGridPos = mkYGridLines helper
-                                , color = helper.color
-                                }
-                           )
-                    )
-        }
+    { xGridPositions = xGridPositions
+    , chartHeight = chartHeight
+    , chartWidth = chartWidth
+    , xLabels = xAxis.values
+    , yLabels = List.map (\{ label, visible } -> { label = label, visible = visible }) yAxes
+    , ySets =
+        List.filter .visible yAxes
+            |> List.map
+                (mkHelper chartModel
+                    >> (\helper ->
+                            { dots = mkDots helper
+                            , lines = (zipChain << mkDots) helper
+                            , yGridVals = helper.yGrids
+                            , yGridPos = mkYGridLines helper
+                            , color = helper.color
+                            }
+                       )
+                )
+    }
 
 
 view : ChartModel r -> Html Msg
@@ -245,39 +246,40 @@ viewChart chart =
             List.indexedMap
                 (\index { label, visible } ->
                     text_
-                        [ x <| toString (100 * index)
+                        [ x <| String.fromInt (100 * index)
                         , y "20"
                         , onClick (ToggleVisibility label)
                         , fill <|
                             if visible then
                                 "black"
+
                             else
                                 "#ddd"
                         ]
                         [ text label ]
                 )
     in
-        svg [ width (toString chart.chartWidth), height (toString chart.chartHeight) ]
-            (showChartLabels chart.yLabels
-                ++ showXLabels chart.xLabels chart.xGridPositions
-                ++ List.concat
-                    (List.map
-                        (\ySet ->
-                            showGrid ySet.yGridPos
-                                ++ showYLabels ySet.yGridVals ySet.yGridPos
-                                ++ showDots ySet.color ySet.dots
-                                ++ showLines ySet.color ySet.lines
-                        )
-                        chart.ySets
+    svg [ width (String.fromInt chart.chartWidth), height (String.fromInt chart.chartHeight) ]
+        (showChartLabels chart.yLabels
+            ++ showXLabels chart.xLabels chart.xGridPositions
+            ++ List.concat
+                (List.map
+                    (\ySet ->
+                        showGrid ySet.yGridPos
+                            ++ showYLabels ySet.yGridVals ySet.yGridPos
+                            ++ showDots ySet.color ySet.dots
+                            ++ showLines ySet.color ySet.lines
                     )
-            )
+                    chart.ySets
+                )
+        )
 
 
 showDot : String -> Position -> Svg msg
 showDot color ( x, y ) =
     circle
-        [ cx <| toString x
-        , cy <| toString y
+        [ cx <| String.fromInt x
+        , cy <| String.fromInt y
         , r "5px"
         , stroke color
         , fill color
@@ -288,12 +290,12 @@ showDot color ( x, y ) =
 showLine : String -> Float -> ( Position, Position ) -> Svg msg
 showLine color lineWidth ( ( x1_, y1_ ), ( x2_, y2_ ) ) =
     line
-        [ x1 <| toString x1_
-        , y1 <| toString y1_
-        , x2 <| toString x2_
-        , y2 <| toString y2_
+        [ x1 <| String.fromInt x1_
+        , y1 <| String.fromInt y1_
+        , x2 <| String.fromInt x2_
+        , y2 <| String.fromInt y2_
         , stroke color
-        , strokeWidth <| toString lineWidth
+        , strokeWidth <| String.fromFloat lineWidth
         ]
         []
 
@@ -301,8 +303,8 @@ showLine color lineWidth ( ( x1_, y1_ ), ( x2_, y2_ ) ) =
 showXLabel : Int -> String -> Int -> Svg msg
 showXLabel yPos label x_ =
     text_
-        [ x <| toString x_
-        , y <| toString yPos
+        [ x <| String.fromInt x_
+        , y <| String.fromInt yPos
         , textAnchor "middle"
         , fill "black"
         ]
@@ -312,12 +314,12 @@ showXLabel yPos label x_ =
 showYLabel : Int -> Int -> ( Position, Position ) -> Svg msg
 showYLabel labelXPos gridVal ( _, ( _, y_ ) ) =
     text_
-        [ x <| toString labelXPos
-        , y <| toString y_
+        [ x <| String.fromInt labelXPos
+        , y <| String.fromInt y_
         , textAnchor "end"
         , fill "black"
         ]
-        [ text <| toString gridVal ]
+        [ text <| String.fromInt gridVal ]
 
 
 zipChain : List a -> List ( a, a )
@@ -335,4 +337,4 @@ zipChain list =
 
 scale : Float -> Int -> Int
 scale float int =
-    (toFloat int) * float |> round
+    toFloat int * float |> round

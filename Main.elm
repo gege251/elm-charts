@@ -1,9 +1,10 @@
-module Main exposing (..)
+module Main exposing (main)
 
+import Browser
+import Chart
 import Html exposing (..)
 import Html.Attributes exposing (placeholder, value)
 import Html.Events exposing (..)
-import Chart
 
 
 type alias Model =
@@ -26,8 +27,8 @@ type Msg
 -- | AddValue String
 
 
-initmodel : Model
-initmodel =
+init : Model
+init =
     { title = "Chart title"
     , chartWidth = 1300
     , chartHeight = 700
@@ -71,19 +72,14 @@ initmodel =
 --     flip setValues
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( initmodel, Cmd.none )
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> Model
 update msg model =
     case msg of
         NoOp ->
-            model ! [ Cmd.none ]
+            model
 
         ChartMsg chartmsg ->
-            Chart.update chartmsg model ! [ Cmd.none ]
+            Chart.update chartmsg model
 
 
 
@@ -104,8 +100,7 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ div [] [ text (toString model.yAxes) ]
-
+        -- [ div [] [ text (viewList model.yAxes) ]
         -- , form [ onSubmit (AddValue model.newValue) ]
         --     [ input
         --         [ onInput InputValue
@@ -115,15 +110,21 @@ view model =
         --         []
         --     , button [] [ text "OK" ]
         --     ]
-        , Html.map ChartMsg (Chart.view model)
+        [ Html.map ChartMsg (Chart.view model)
         ]
 
 
-main : Program Never Model Msg
+viewList : List Int -> String
+viewList list =
+    list
+        |> List.map (\num -> String.fromInt num)
+        |> String.join ", "
+
+
+main : Program () Model Msg
 main =
-    program
+    Browser.sandbox
         { init = init
         , view = view
         , update = update
-        , subscriptions = always Sub.none
         }
